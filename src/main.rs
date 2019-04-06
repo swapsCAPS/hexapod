@@ -9,16 +9,17 @@ const DEFAULT_PCA9685_ADDRESS: u16 = 0x40;
 const SERVO_MIN: u8 = 65;
 const SERVO_MAX: u8 = 220;
 
-struct Joint {
+struct Joint<'a> {
+  servos: &'a i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>,
   pin: u8,
   min: u8,
   max: u8,
   pos: u8,
 }
-impl Joint {
-  fn new(pin: u8, min: u8, max: u8) -> Joint {
+impl <'a>Joint<'a> {
+  fn new(servos: &i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>, pin: u8, min: u8, max: u8) -> Joint {
     let pos = max - min / 2;
-    Joint { pin, min, max, pos }
+    Joint { servos, pin, min, max, pos }
   }
 
   fn center(&mut self) {
@@ -36,15 +37,15 @@ enum LegType { Front, Middle, Back }
 
 // Each leg for one side will have different motions asociated with a step... I.e. back legs will
 // behave differently from front legs
-struct Leg {
+struct Leg<'a> {
   leg_type: LegType,
-  pelvis: Joint,
-  knee: Joint,
-  ankle: Joint
+  pelvis:   Joint<'a>,
+  knee:     Joint<'a>,
+  ankle:    Joint<'a>
 }
 
-impl Leg {
-  fn new(leg_type: LegType, mut pelvis: Joint, mut knee: Joint, mut ankle: Joint) -> Leg {
+impl<'a> Leg<'a> {
+  fn new(leg_type: LegType, mut pelvis: Joint<'a>, mut knee: Joint<'a>, mut ankle: Joint<'a>) -> Leg<'a> {
     pelvis.center();
     knee.center();
     ankle.center();
@@ -91,23 +92,27 @@ impl Leg {
 
 }
 
-struct Brain {
-  fl: Leg,
+struct Brain<'a> {
+  fl: Leg<'a>,
   // fr: Leg,
   // ml: Leg,
   // mr: Leg,
   // bl: Leg,
   // br: Leg
 }
-impl Brain {
-  fn new(servos: i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>) -> Brain {
+impl<'a> Brain<'a> {
+  fn new(servos: &i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>) -> Brain {
     println!("New brain!");
+
+    let ankle  = Joint::new(&servos, 0, 0, 180);
+    let knee   = Joint::new(&servos, 0, 0, 180);
+    let pelvis = Joint::new(&servos, 0, 0, 180);
 
     let fl = Leg::new(
       LegType::Front,
-      Joint::new(0, 0, 180),
-      Joint::new(1, 0, 180),
-      Joint::new(2, 0, 180),
+      ankle,
+      knee,
+      pelvis,
     );
 
     Brain {
@@ -134,7 +139,7 @@ mod tests {
     let mut servos = PCA9685::new(i2cdevice).unwrap();
     servos.set_pwm_freq(60.0).unwrap();
 
-    let mut brain = Brain::new(servos);
+    let mut brain = Brain::new(&servos);
     brain.walk(0, 1000);
 
   }
