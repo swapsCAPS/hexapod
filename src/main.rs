@@ -147,12 +147,8 @@ mod tests {
 
   #[test]
   fn test_walk() {
-    let i2cdevice = LinuxI2CDevice::new("/dev/i2c-1", DEFAULT_PCA9685_ADDRESS).unwrap();
-    let mut servos = PCA9685::new(i2cdevice).unwrap();
-    servos.set_pwm_freq(60.0).unwrap();
-
-    let mut brain = Brain::new(&servos);
+    let servo_wrapper = ServoWrapper::new();
+    let mut brain = Brain::new(&servo_wrapper);
     brain.walk(0, 1000);
-
   }
 }
