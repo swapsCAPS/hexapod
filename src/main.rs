@@ -2,8 +2,25 @@ use std::{thread, time};
 
 struct Joint {
   pin: u8,
-  min: u64,
-  max: u64
+  min: u8,
+  max: u8,
+  pos: u8,
+}
+impl Joint {
+  fn new(pin: u8, min: u8, max: u8) -> Joint {
+    let pos = max - min / 2;
+    Joint { pin, min, max, pos }
+  }
+
+  fn center(&mut self) {
+    self.mv(self.max - self.min / 2);
+  }
+
+  fn mv(&mut self, pos: u8) -> () {
+    if pos > self.max || pos < self.min { return println!("Cannot move beyond limits") }
+    self.pos = pos
+    // Send pwm to `pin`
+  }
 }
 
 enum LegType { Front, Middle, Back }
@@ -18,21 +35,41 @@ struct Leg {
 }
 
 impl Leg {
-  fn new(leg_type: LegType, pelvis: Joint, knee: Joint, ankle: Joint) -> Leg {
+  fn new(leg_type: LegType, mut pelvis: Joint, mut knee: Joint, mut ankle: Joint) -> Leg {
+    pelvis.center();
+    knee.center();
+    ankle.center();
     Leg { leg_type, pelvis, knee, ankle }
   }
 
-  fn step(&self, dir: u16) -> () {
+  fn step(&mut self, dir: u16, speed: u64) -> () {
     // match leg_type
-    println!("Step!");
+    println!("Doing step!");
     match self.leg_type {
       LegType::Front => {
-        println!("Moving front leg");
+        // Move knee up
+        self.knee.mv(90);
+        // Compensate ankle
+        self.ankle.mv(180);
+        // Turn pelvis max
+        self.pelvis.mv(self.pelvis.max);
+        println!("Moved front leg {0}, {1}, {2}", self.pelvis.pos, self.knee.pos, self.ankle.pos );
+        thread::sleep(time::Duration::from_millis(speed));
+        // Move knee down
+        self.knee.mv(45);
+        // Compensate ankle
+        self.ankle.mv(180 - 45);
+        // Turn pelvis min
+        self.pelvis.mv(self.pelvis.min);
+        println!("Moved front leg {0}, {1}, {2}", self.pelvis.pos, self.knee.pos, self.ankle.pos );
+        thread::sleep(time::Duration::from_millis(speed));
+
       }
       _ => {
         println!("Not implemented!");
       }
     }
+    println!("stepped!");
 
   }
 
@@ -56,9 +93,9 @@ impl Brain {
 
     let fl = Leg::new(
       LegType::Front,
-      Joint { pin: 0, min: 0, max: 180 },
-      Joint { pin: 1, min: 0, max: 180 },
-      Joint { pin: 2, min: 0, max: 180 },
+      Joint::new(0, 0, 180),
+      Joint::new(1, 0, 180),
+      Joint::new(2, 0, 180),
     );
 
     Brain {
@@ -66,11 +103,8 @@ impl Brain {
     }
   }
 
-  fn walk(&self, speed: u64, dir: u16) -> () {
-    self.fl.step(dir);
-    thread::sleep(time::Duration::from_millis(speed));
-    self.fl.step(dir);
-
+  fn walk(&mut self, dir: u16, speed: u64) -> () {
+    self.fl.step(dir, speed);
   }
 }
 
@@ -84,8 +118,8 @@ mod tests {
 
   #[test]
   fn test_walk() {
-    let brain = Brain::new();
-    brain.walk(1000, 0);
+    let mut brain = Brain::new();
+    brain.walk(0, 1000);
 
   }
 }
