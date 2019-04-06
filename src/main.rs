@@ -1,7 +1,13 @@
-use std::{thread, time};
-extern crate pwm_pca9685;
+extern crate i2cdev;
+extern crate i2c_pca9685;
 
-use pwm_pca9685::{Channel, Pca9685, SlaveAddr};
+use i2cdev::linux::*;
+use i2c_pca9685::PCA9685;
+use std::{thread, time};
+
+const DEFAULT_PCA9685_ADDRESS: u16 = 0x40;
+const SERVO_MIN: u8 = 65;
+const SERVO_MAX: u8 = 220;
 
 struct Joint {
   pin: u8,
@@ -94,7 +100,7 @@ struct Brain {
   // br: Leg
 }
 impl Brain {
-  fn new() -> Brain {
+  fn new(servos: i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>) -> Brain {
     println!("New brain!");
 
     let fl = Leg::new(
@@ -124,7 +130,11 @@ mod tests {
 
   #[test]
   fn test_walk() {
-    let mut brain = Brain::new();
+    let i2cdevice = LinuxI2CDevice::new("/dev/i2c-1", DEFAULT_PCA9685_ADDRESS).unwrap();
+    let mut servos = PCA9685::new(i2cdevice).unwrap();
+    servos.set_pwm_freq(60.0).unwrap();
+
+    let mut brain = Brain::new(servos);
     brain.walk(0, 1000);
 
   }

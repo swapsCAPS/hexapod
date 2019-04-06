@@ -5,4 +5,5 @@ authors = ["swapsCAPS <verstegen.daan@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-pwm-pca9685 = "0.1.0"
+i2c-pca9685 = "0.1.8"
+i2cdev = "0.3.1"
