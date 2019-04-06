@@ -5,3 +5,4 @@ authors = ["swapsCAPS <verstegen.daan@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+pwm-pca9685 = "0.1.0"

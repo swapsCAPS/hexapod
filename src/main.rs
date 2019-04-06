@@ -1,4 +1,7 @@
 use std::{thread, time};
+extern crate pwm_pca9685;
+
+use pwm_pca9685::{Channel, Pca9685, SlaveAddr};
 
 struct Joint {
   pin: u8,
@@ -73,8 +76,11 @@ impl Leg {
 
   }
 
-  fn rest(&self) -> () {
+  fn rest(mut self) -> () {
     // Go into resting position for this leg
+    self.pelvis.center();
+    self.knee.center();
+    self.ankle.center();
   }
 
 }
