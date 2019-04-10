@@ -23,14 +23,14 @@ impl ServoWrapper {
 struct Joint<'a> {
   servo_wrapper: &'a ServoWrapper,
   pin:           u8,
-  min:           u8,
-  max:           u8,
-  pos:           u8,
+  min:           u16,
+  max:           u16,
+  pos:           u16,
   rat:           f32,
-  max_degrees:   u8,
+  max_degrees:   u16,
 }
 impl<'a> Joint<'a> {
-  fn new(servo_wrapper: &ServoWrapper, pin: u8, min: u8, max: u8, max_degrees: u8) -> Joint {
+  fn new(servo_wrapper: &ServoWrapper, pin: u8, min: u16, max: u16, max_degrees: u16) -> Joint {
     let pos = max - min / 2;
     let rat = (max - min) as f32 / max_degrees as f32;
     println!("min: {}", min);
@@ -38,10 +38,10 @@ impl<'a> Joint<'a> {
     Joint { servo_wrapper, pin, min, max, pos, rat, max_degrees }
   }
 
-  fn mv(&mut self, degrees: u8) {
+  fn mv(&mut self, degrees: u16) {
     if degrees > self.max_degrees { return println!("Cannot move beyond limits") }
 
-	let pos = self.min + (self.rat * degrees as f32) as u8;
+	let pos = self.min + (self.rat * degrees as f32) as u16;
 	println!("Pos: {}", pos);
 	println!("Deg: {}", degrees);
 	self.pos = pos;
@@ -53,13 +53,13 @@ impl<'a> Joint<'a> {
     for j in self.min..self.max {
 		println!("Pos: {}", j);
         self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
-		thread::sleep(time::Duration::from_millis(150));
+		thread::sleep(time::Duration::from_millis(10));
     }
     thread::sleep(time::Duration::from_millis(500));
     for j in (self.min..self.max).rev() {
 		println!("Pos: {}", j);
         self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
-		thread::sleep(time::Duration::from_millis(150));
+		thread::sleep(time::Duration::from_millis(10));
     }
     thread::sleep(time::Duration::from_millis(500));
     thread::sleep(time::Duration::from_millis(5000));
@@ -88,7 +88,7 @@ impl<'a> Leg<'a> {
     println!("Doing step!");
     match self.leg_type {
       LegType::Front => {
-        self.pelvis.test()
+        self.knee.test()
         // Move knee up
         // // Move knee down
         // self.knee.mv(45);
@@ -122,9 +122,9 @@ impl<'a> Brain<'a> {
   fn new(servo_wrapper: &ServoWrapper) -> Brain {
     println!("New brain!");
 
-    let pelvis = Joint::new(servo_wrapper, 0, 500, 600, 180);
-    let knee   = Joint::new(servo_wrapper, 1, 120, 220, 180);
-    let ankle  = Joint::new(servo_wrapper, 2, 120, 220, 180);
+    let pelvis = Joint::new(servo_wrapper, 0, 140, 580, 180);
+    let knee = Joint::new(servo_wrapper, 1, 120, 580, 180);
+    let ankle = Joint::new(servo_wrapper, 2, 110, 580, 180);
 
     let fl = Leg::new(
       LegType::Front,
