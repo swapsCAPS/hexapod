@@ -88,16 +88,24 @@ impl<'a> Leg<'a> {
     println!("Doing step!");
     match self.leg_type {
       LegType::Front => {
-        self.knee.test()
-        // Move knee up
-        // // Move knee down
-        // self.knee.mv(45);
-        // // Compensate ankle
-        // self.ankle.mv(180 - 45);
-        // // Turn pelvis min
-        // self.pelvis.mv(self.pelvis.min);
-        // println!("Moved front leg {0}, {1}, {2}", self.pelvis.pos, self.knee.pos, self.ankle.pos );
-        // thread::sleep(time::Duration::from_millis(speed));
+		// Setup
+		self.knee.mv(20);
+		self.ankle.mv(80);
+		self.pelvis.mv(140);
+
+		while true {
+			thread::sleep(time::Duration::from_millis(speed));
+			self.pelvis.mv(20);
+			thread::sleep(time::Duration::from_millis(speed));
+			self.knee.mv(90);
+			self.ankle.mv(150);
+			thread::sleep(time::Duration::from_millis(speed));
+			self.pelvis.mv(140);
+			thread::sleep(time::Duration::from_millis(speed));
+			self.knee.mv(20);
+			self.ankle.mv(80);
+		}
+
 
       }
       _ => {
@@ -155,6 +163,6 @@ mod tests {
   fn test_walk() {
     let servo_wrapper = ServoWrapper::new();
     let mut brain = Brain::new(&servo_wrapper);
-    brain.walk(0, 5000);
+    brain.walk(0, 200);
   }
 }
