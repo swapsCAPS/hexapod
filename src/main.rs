@@ -9,7 +9,7 @@ use std::cell::RefCell;
 
 const DEFAULT_PCA9685_ADDRESS: u16 = 0x40;
 struct ServoWrapper {
-  servos: RefCell<i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>>,
+servos: RefCell<i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>>,
 }
 impl ServoWrapper {
   fn new() -> ServoWrapper {
@@ -27,52 +27,49 @@ struct Joint<'a> {
   max:           u16,
   pos:           u16,
   rat:           f32,
-  max_degrees:   u16,
 }
 impl<'a> Joint<'a> {
-  fn new(servo_wrapper: &ServoWrapper, pin: u8, min: u16, max: u16, max_degrees: u16) -> Joint {
+  fn new(servo_wrapper: &ServoWrapper, pin: u8, min: u16, max: u16) -> Joint {
     let pos = max - min / 2;
-    let rat = (max - min) as f32 / max_degrees as f32;
-    println!("min: {}", min);
-    println!("max: {}", max);
-    Joint { servo_wrapper, pin, min, max, pos, rat, max_degrees }
+    let rat = (max - min) as f32 / 180.0;
+    Joint { servo_wrapper, pin, min, max, pos, rat }
   }
 
   fn mv(&mut self, degrees: u16) {
-    if degrees > self.max_degrees { return println!("Cannot move beyond limits") }
-
-	let pos = self.min + (self.rat * degrees as f32) as u16;
-	println!("Pos: {}", pos);
-	println!("Deg: {}", degrees);
-	self.pos = pos;
-	self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 0, pos).unwrap();
+    let pos  = self.min + (self.rat * degrees as f32) as u16;
+    self.pos = pos;
+    self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 0, pos).unwrap();
   }
-  fn test(&self) {
-	  while true {
 
+  // Test the joint movement. Helpful when tweaking the PWM signal
+  fn test(&self) {
     for j in self.min..self.max {
-		println!("Pos: {}", j);
-        self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
-		thread::sleep(time::Duration::from_millis(10));
+      println!("Pos: {}", j);
+      self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
+      thread::sleep(time::Duration::from_millis(10));
     }
+
     thread::sleep(time::Duration::from_millis(500));
+
     for j in (self.min..self.max).rev() {
-		println!("Pos: {}", j);
-        self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
-		thread::sleep(time::Duration::from_millis(10));
+      println!("Pos: {}", j);
+      self.servo_wrapper.servos.borrow_mut().set_pwm(self.pin, 1, j).unwrap();
+      thread::sleep(time::Duration::from_millis(10));
     }
-    thread::sleep(time::Duration::from_millis(500));
-    thread::sleep(time::Duration::from_millis(5000));
-	  }
+
   }
 }
 
+#[derive(Debug)]
 enum LegType { Front, Middle, Back }
+// impl fmt::Debug for LegType {
+
+// }
 
 // Each leg for one side will have different motions asociated with a step... I.e. back legs will
 // behave differently from front legs
 struct Leg<'a> {
-  leg_type: LegType,
+leg_type: LegType,
   pelvis:   Joint<'a>,
   knee:     Joint<'a>,
   ankle:    Joint<'a>
@@ -83,35 +80,77 @@ impl<'a> Leg<'a> {
     Leg { leg_type, pelvis, knee, ankle }
   }
 
+  fn reset(&mut self) {
+    match self.leg_type {
+      LegType::Front => {
+        self.pelvis.mv(180);
+        self.knee.mv(90);
+        self.ankle.mv(50);
+      }
+      LegType::Middle => {
+        self.pelvis.mv(90);
+        self.knee.mv(90);
+        self.ankle.mv(50);
+      }
+      LegType::Back => {
+        self.pelvis.mv(90);
+        self.knee.mv(90);
+        self.ankle.mv(50);
+      }
+      _ => {
+        println!("reset() Not implemented! {:?}", self.leg_type);
+      }
+    }
+  }
+
+  fn lower(&mut self) {
+    self.knee.mv(90);
+    self.ankle.mv(50);
+  }
+
+  fn raise(&mut self) {
+    self.knee.mv(120);
+    self.ankle.mv(80);
+  }
+
+  fn forward(&mut self) {
+    match self.leg_type {
+      LegType::Front => {
+        self.pelvis.mv(180);
+      }
+      LegType::Middle => {
+        self.pelvis.mv(110);
+      }
+      LegType::Back => {
+        self.pelvis.mv(90);
+      }
+      _ => {
+        println!("{:?} forward() not implemented!", self.leg_type);
+      }
+    }
+  }
+
+  fn backward(&mut self) {
+    match self.leg_type {
+      LegType::Front => {
+        self.pelvis.mv(90);
+      }
+      LegType::Middle => {
+        self.pelvis.mv(80);
+      }
+      LegType::Back => {
+        self.pelvis.mv(0);
+      }
+      _ => {
+        println!("{:?} backward() not implemented!", self.leg_type);
+      }
+    }
+  }
+
   fn step(&mut self, _dir: u16, speed: u64) {
     // match leg_type
     println!("Doing step!");
-    match self.leg_type {
-      LegType::Front => {
-		// Setup
-		self.knee.mv(20);
-		self.ankle.mv(80);
-		self.pelvis.mv(140);
 
-		while true {
-			thread::sleep(time::Duration::from_millis(speed));
-			self.pelvis.mv(20);
-			thread::sleep(time::Duration::from_millis(speed));
-			self.knee.mv(90);
-			self.ankle.mv(150);
-			thread::sleep(time::Duration::from_millis(speed));
-			self.pelvis.mv(140);
-			thread::sleep(time::Duration::from_millis(speed));
-			self.knee.mv(20);
-			self.ankle.mv(80);
-		}
-
-
-      }
-      _ => {
-        println!("Not implemented!");
-      }
-    }
     println!("stepped!");
 
   }
@@ -119,33 +158,126 @@ impl<'a> Leg<'a> {
 }
 
 struct Brain<'a> {
+  fr: Leg<'a>,
+  mr: Leg<'a>,
+  br: Leg<'a>,
   fl: Leg<'a>,
-  // fr: Leg,
-  // ml: Leg,
-  // mr: Leg,
-  // bl: Leg,
-  // br: Leg
+  ml: Leg<'a>,
+  // bl: Leg<'a>,
 }
 impl<'a> Brain<'a> {
   fn new(servo_wrapper: &ServoWrapper) -> Brain {
     println!("New brain!");
 
-    let pelvis = Joint::new(servo_wrapper, 0, 140, 580, 180);
-    let knee = Joint::new(servo_wrapper, 1, 120, 580, 180);
-    let ankle = Joint::new(servo_wrapper, 2, 110, 580, 180);
+    Brain {
+      fr: Leg {
+        leg_type: LegType::Front,
+        pelvis:   Joint::new(servo_wrapper, 0, 140, 580),
+        knee:     Joint::new(servo_wrapper, 1, 120, 580),
+        ankle:    Joint::new(servo_wrapper, 2, 110, 580),
+      },
+      mr: Leg {
+        leg_type: LegType::Middle,
+        pelvis:  Joint::new(servo_wrapper, 3, 140, 580),
+        knee:    Joint::new(servo_wrapper, 4, 120, 580),
+        ankle:   Joint::new(servo_wrapper, 5, 110, 580),
+      },
+      br: Leg {
+        leg_type: LegType::Back,
+        pelvis:  Joint::new(servo_wrapper, 6, 120, 580),
+        knee:    Joint::new(servo_wrapper, 7, 120, 580),
+        ankle:   Joint::new(servo_wrapper, 8, 110, 580),
+      },
+      fl: Leg {
+        leg_type: LegType::Front,
+        pelvis:  Joint::new(servo_wrapper, 9,  120, 580),
+        knee:    Joint::new(servo_wrapper, 10, 120, 580),
+        ankle:   Joint::new(servo_wrapper, 11, 110, 580),
+      },
+      ml: Leg {
+        leg_type: LegType::Middle,
+        pelvis:  Joint::new(servo_wrapper, 12, 120, 580),
+        knee:    Joint::new(servo_wrapper, 13, 120, 580),
+        ankle:   Joint::new(servo_wrapper, 14, 110, 580),
+      },
+      // bl: Leg
+        // leg_type: LegType::Back,
+        // pelvis:  Joint::new(servo_wrapper, 15, 120, 580),
+        // knee:    Joint::new(servo_wrapper, 16, 120, 580),
+        // ankle:   Joint::new(servo_wrapper, 17, 110, 580),
+      // }
+    }
+  }
 
-    let fl = Leg::new(
-      LegType::Front,
-      pelvis,
-      knee,
-      ankle,
-    );
+  fn step_a(&mut self, dir: u16, speed: u64) {
+    self.fl.reset();
+    // self.bl.reset();
+    self.mr.reset();
 
-    Brain { fl }
+    thread::sleep(time::Duration::from_millis(speed * 2));
+
+    self.fl.backward();
+    // self.bl.backward();
+    self.mr.backward();
+
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fl.raise();
+    // self.bl.raise();
+    self.mr.raise();
+
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fl.forward();
+    // self.bl.forward();
+    self.mr.forward();
+
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fl.lower();
+    // self.bl.lower();
+    self.mr.lower();
+  }
+
+  fn step_b(&mut self, dir: u16, speed: u64) {
+    self.fr.reset();
+    self.br.reset();
+    self.ml.reset();
+
+    println!("reset");
+    thread::sleep(time::Duration::from_millis(speed * 2));
+
+    self.fr.backward();
+    self.ml.backward();
+    self.br.backward();
+
+    println!("backward");
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fr.raise();
+    self.ml.raise();
+    self.br.raise();
+
+    println!("raise");
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fr.forward();
+    self.ml.forward();
+    self.br.forward();
+
+    println!("forward");
+    thread::sleep(time::Duration::from_millis(speed));
+
+    self.fr.lower();
+    self.ml.lower();
+    self.br.lower();
+    println!("lower");
   }
 
   fn walk(&mut self, dir: u16, speed: u64) {
-    self.fl.step(dir, speed);
+    self.step_b(dir, speed);
+    thread::sleep(time::Duration::from_millis(speed));
+    self.step_a(dir, speed);
   }
 }
 
@@ -159,10 +291,10 @@ fn main() {
 mod tests {
   use super::*;
 
-  #[test]
+#[test]
   fn test_walk() {
     let servo_wrapper = ServoWrapper::new();
     let mut brain = Brain::new(&servo_wrapper);
-    brain.walk(0, 200);
+    brain.walk(0, 1000);
   }
 }
