@@ -7,13 +7,12 @@ use std::{thread, time};
 use std::cell::RefCell;
 
 
-const DEFAULT_PCA9685_ADDRESS: u16 = 0x40;
 struct ServoWrapper {
 servos: RefCell<i2c_pca9685::PCA9685<i2cdev::linux::LinuxI2CDevice>>,
 }
 impl ServoWrapper {
-  fn new() -> ServoWrapper {
-    let i2cdevice = LinuxI2CDevice::new("/dev/i2c-1", DEFAULT_PCA9685_ADDRESS).unwrap();
+  fn new(address: u16) -> ServoWrapper {
+    let i2cdevice = LinuxI2CDevice::new("/dev/i2c-1", address).unwrap();
     let mut servos = PCA9685::new(i2cdevice).unwrap();
     servos.set_pwm_freq(60.0).unwrap();
     ServoWrapper { servos: RefCell::new(servos) }
@@ -62,55 +61,85 @@ impl<'a> Joint<'a> {
 
 #[derive(Debug)]
 enum LegType { Front, Middle, Back }
-// impl fmt::Debug for LegType {
 
-// }
+#[derive(Debug)]
+enum Side { Left, Right }
 
 // Each leg for one side will have different motions asociated with a step... I.e. back legs will
 // behave differently from front legs
 struct Leg<'a> {
-leg_type: LegType,
+  side:     Side,
+  leg_type: LegType,
   pelvis:   Joint<'a>,
   knee:     Joint<'a>,
   ankle:    Joint<'a>
 }
 
 impl<'a> Leg<'a> {
-  fn new(leg_type: LegType, pelvis: Joint<'a>, knee: Joint<'a>, ankle: Joint<'a>) -> Leg<'a> {
-    Leg { leg_type, pelvis, knee, ankle }
+  fn new(side: Side, leg_type: LegType, pelvis: Joint<'a>, knee: Joint<'a>, ankle: Joint<'a>) -> Leg<'a> {
+    Leg { side, leg_type, pelvis, knee, ankle }
   }
 
   fn reset(&mut self) {
-    match self.leg_type {
-      LegType::Front => {
-        self.pelvis.mv(180);
-        self.knee.mv(90);
-        self.ankle.mv(50);
+    match self.side {
+      Side::Left => {
+        match self.leg_type {
+          LegType::Front => {
+            self.pelvis.mv(0);
+            self.knee.mv(30);
+            self.ankle.mv(120);
+          }
+          LegType::Middle => {
+            self.pelvis.mv(90);
+            self.knee.mv(30);
+            self.ankle.mv(100);
+          }
+          LegType::Back => {
+            self.pelvis.mv(180);
+            self.knee.mv(30);
+            self.ankle.mv(90);
+          }
+          _ => {
+            println!("reset() Not implemented! {:?}", self.leg_type);
+          }
+        }
       }
-      LegType::Middle => {
-        self.pelvis.mv(90);
-        self.knee.mv(90);
-        self.ankle.mv(50);
-      }
-      LegType::Back => {
-        self.pelvis.mv(90);
-        self.knee.mv(90);
-        self.ankle.mv(50);
+      Side::Right => {
+        match self.leg_type {
+          LegType::Front => {
+            self.pelvis.mv(180);
+            self.knee.mv(140);
+            self.ankle.mv(140);
+          }
+          LegType::Middle => {
+            self.pelvis.mv(90);
+            self.knee.mv(140);
+            self.ankle.mv(140);
+          }
+          LegType::Back => {
+            self.pelvis.mv(0);
+            self.knee.mv(140);
+            self.ankle.mv(140);
+          }
+          _ => {
+            println!("reset() Not implemented! {:?}", self.leg_type);
+          }
+        }
       }
       _ => {
-        println!("reset() Not implemented! {:?}", self.leg_type);
+        println!("reset() Not implemented! {:?}", self.side);
       }
     }
   }
 
   fn lower(&mut self) {
     self.knee.mv(90);
-    self.ankle.mv(50);
+    self.ankle.mv(140);
   }
 
   fn raise(&mut self) {
     self.knee.mv(120);
-    self.ankle.mv(80);
+    self.ankle.mv(60);
   }
 
   fn forward(&mut self) {
@@ -152,9 +181,7 @@ impl<'a> Leg<'a> {
     println!("Doing step!");
 
     println!("stepped!");
-
   }
-
 }
 
 struct Brain<'a> {
@@ -163,80 +190,86 @@ struct Brain<'a> {
   br: Leg<'a>,
   fl: Leg<'a>,
   ml: Leg<'a>,
-  // bl: Leg<'a>,
+  bl: Leg<'a>,
 }
 impl<'a> Brain<'a> {
-  fn new(servo_wrapper: &ServoWrapper) -> Brain {
+  fn new(left: &'a ServoWrapper, right: &'a ServoWrapper) -> Brain<'a> {
     println!("New brain!");
 
     Brain {
-      fr: Leg {
-        leg_type: LegType::Front,
-        pelvis:   Joint::new(servo_wrapper, 0, 140, 580),
-        knee:     Joint::new(servo_wrapper, 1, 120, 580),
-        ankle:    Joint::new(servo_wrapper, 2, 110, 580),
+      br: Leg {
+        side:     Side::Right,
+        leg_type: LegType::Back,
+        pelvis:   Joint::new(right, 0, 140, 580),
+        knee:     Joint::new(right, 1, 120, 580),
+        ankle:    Joint::new(right, 2, 110, 580),
       },
       mr: Leg {
+        side:     Side::Right,
         leg_type: LegType::Middle,
-        pelvis:   Joint::new(servo_wrapper, 3, 140, 580),
-        knee:     Joint::new(servo_wrapper, 4, 120, 580),
-        ankle:    Joint::new(servo_wrapper, 5, 110, 580),
+        pelvis:   Joint::new(right, 3, 140, 580),
+        knee:     Joint::new(right, 4, 120, 580),
+        ankle:    Joint::new(right, 5, 110, 580),
       },
-      br: Leg {
-        leg_type: LegType::Back,
-        pelvis:   Joint::new(servo_wrapper, 6, 120, 580),
-        knee:     Joint::new(servo_wrapper, 7, 120, 580),
-        ankle:    Joint::new(servo_wrapper, 8, 110, 580),
-      },
-      fl: Leg {
+      fr: Leg {
+        side:     Side::Right,
         leg_type: LegType::Front,
-        pelvis:   Joint::new(servo_wrapper, 9,  120, 580),
-        knee:     Joint::new(servo_wrapper, 10, 120, 580),
-        ankle:    Joint::new(servo_wrapper, 11, 110, 580),
+        pelvis:   Joint::new(right, 6, 120, 600),
+        knee:     Joint::new(right, 7, 120, 580),
+        ankle:    Joint::new(right, 8, 110, 580),
+      },
+      bl: Leg {
+        side:     Side::Left,
+        leg_type: LegType::Back,
+        pelvis:   Joint::new(left, 0, 120, 600),
+        knee:     Joint::new(left, 1, 120, 580),
+        ankle:    Joint::new(left, 2, 110, 580),
       },
       ml: Leg {
+        side:     Side::Left,
         leg_type: LegType::Middle,
-        pelvis:   Joint::new(servo_wrapper, 12, 120, 580),
-        knee:     Joint::new(servo_wrapper, 13, 120, 580),
-        ankle:    Joint::new(servo_wrapper, 14, 110, 580),
+        pelvis:   Joint::new(left, 3, 120, 620),
+        knee:     Joint::new(left, 4, 120, 580),
+        ankle:    Joint::new(left, 5, 110, 580),
       },
-      // bl: Leg
-        // leg_type: LegType::Back,
-        // pelvis:  Joint::new(servo_wrapper, 15, 120, 580),
-        // knee:    Joint::new(servo_wrapper, 16, 120, 580),
-        // ankle:   Joint::new(servo_wrapper, 17, 110, 580),
-      // }
+      fl: Leg {
+        side:     Side::Left,
+        leg_type: LegType::Front,
+        pelvis:   Joint::new(left,  6, 140, 580),
+        knee:     Joint::new(left,  7, 120, 580),
+        ankle:    Joint::new(left,  8, 110, 580),
+      }
     }
   }
 
   fn step_a(&mut self, dir: u16, speed: u64) {
     self.fl.reset();
-    // self.bl.reset();
+    self.bl.reset();
     self.mr.reset();
 
-    thread::sleep(time::Duration::from_millis(speed * 2));
+    // thread::sleep(time::Duration::from_millis(speed * 2));
 
-    self.fl.backward();
+    // self.fl.backward();
     // self.bl.backward();
-    self.mr.backward();
+    // self.mr.backward();
 
-    thread::sleep(time::Duration::from_millis(speed));
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fl.raise();
+    // self.fl.raise();
     // self.bl.raise();
-    self.mr.raise();
+    // self.mr.raise();
 
-    thread::sleep(time::Duration::from_millis(speed));
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fl.forward();
+    // self.fl.forward();
     // self.bl.forward();
-    self.mr.forward();
+    // self.mr.forward();
 
-    thread::sleep(time::Duration::from_millis(speed));
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fl.lower();
+    // self.fl.lower();
     // self.bl.lower();
-    self.mr.lower();
+    // self.mr.lower();
   }
 
   fn step_b(&mut self, dir: u16, speed: u64) {
@@ -244,34 +277,34 @@ impl<'a> Brain<'a> {
     self.br.reset();
     self.ml.reset();
 
-    println!("reset");
-    thread::sleep(time::Duration::from_millis(speed * 2));
+    // println!("reset");
+    // thread::sleep(time::Duration::from_millis(speed * 2));
 
-    self.fr.backward();
-    self.ml.backward();
-    self.br.backward();
+    // self.fr.backward();
+    // self.ml.backward();
+    // self.br.backward();
 
-    println!("backward");
-    thread::sleep(time::Duration::from_millis(speed));
+    // println!("backward");
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fr.raise();
-    self.ml.raise();
-    self.br.raise();
+    // self.fr.raise();
+    // self.ml.raise();
+    // self.br.raise();
 
-    println!("raise");
-    thread::sleep(time::Duration::from_millis(speed));
+    // println!("raise");
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fr.forward();
-    self.ml.forward();
-    self.br.forward();
+    // self.fr.forward();
+    // self.ml.forward();
+    // self.br.forward();
 
-    println!("forward");
-    thread::sleep(time::Duration::from_millis(speed));
+    // println!("forward");
+    // thread::sleep(time::Duration::from_millis(speed));
 
-    self.fr.lower();
-    self.ml.lower();
-    self.br.lower();
-    println!("lower");
+    // self.fr.lower();
+    // self.ml.lower();
+    // self.br.lower();
+    // println!("lower");
   }
 
   fn walk(&mut self, dir: u16, speed: u64) {
@@ -282,9 +315,10 @@ impl<'a> Brain<'a> {
 }
 
 fn main() {
-  let servo_wrapper = ServoWrapper::new();
-  let mut brain = Brain::new(&servo_wrapper);
-  brain.walk(0, 1000);
+  // let left = ServoWrapper::new(0x40);
+  // let right = ServoWrapper::new(0x41);
+  // let mut brain = Brain::new(&left, &right);
+  // brain.walk(0, 1000);
 }
 
 #[cfg(test)]
@@ -293,8 +327,9 @@ mod tests {
 
 #[test]
   fn test_walk() {
-    let servo_wrapper = ServoWrapper::new();
-    let mut brain = Brain::new(&servo_wrapper);
+    let left = ServoWrapper::new(0x40);
+    let right = ServoWrapper::new(0x41);
+    let mut brain = Brain::new(&left, &right);
     brain.walk(0, 1000);
   }
 }
